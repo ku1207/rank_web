@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import type { AnalysisResult, ClaudeInsight, CompetitorRankData } from '@/types/competitor-rank'
+import type { ClaudeInsight, CompetitorRankData } from '@/types/competitor-rank'
 
 const STORAGE_KEY = 'analysisPayload'
 
@@ -78,7 +78,6 @@ function calculateAdvertiserAverage(items: CompetitorRankData[]): number {
 export default function Page2() {
   const [isLoading, setIsLoading] = useState(true)
   const [rawData, setRawData] = useState<CompetitorRankData[]>([])
-  const [analysis, setAnalysis] = useState<AnalysisResult[]>([])
   const [insight, setInsight] = useState<ClaudeInsight | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('insight')
   const [isInsightOpen, setIsInsightOpen] = useState(false)
@@ -96,7 +95,6 @@ export default function Page2() {
       }
       const parsed = JSON.parse(stored) as {
         rawData: CompetitorRankData[]
-        analysisResult: AnalysisResult[]
         insight: ClaudeInsight
       }
 
@@ -106,7 +104,6 @@ export default function Page2() {
       }
 
       setRawData(parsed.rawData)
-      setAnalysis(parsed.analysisResult || [])
       setInsight(parsed.insight)
     } catch (error) {
       console.error('결과 로드 중 오류:', error)
