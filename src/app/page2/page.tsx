@@ -33,6 +33,8 @@ type NormalizedInsight = {
   actions: string[]
 }
 
+type HourKey = Extract<keyof CompetitorRankData, `hour_${string}`>
+
 function buildAdvertiserComparison(rawData: CompetitorRankData[]): AdvertiserComparisonRow[] {
   const byAdvertiser = new Map<string, { pc: CompetitorRankData[]; mobile: CompetitorRankData[] }>()
 
@@ -63,8 +65,8 @@ function calculateAdvertiserAverage(items: CompetitorRankData[]): number {
   const rowAverages = items.map((item) => {
     const values: number[] = []
     for (let i = 0; i < 24; i++) {
-      const key = `hour_${String(i).padStart(2, '0')}` as keyof CompetitorRankData
-      const v = item[key] as number
+      const key = `hour_${String(i).padStart(2, '0')}` as HourKey
+      const v = item[key]
       if (v > 0) values.push(v)
     }
     if (!values.length) return 0
@@ -368,7 +370,7 @@ function InsightSection({ insight, visible }: { insight: NormalizedInsight; visi
 
 function DetailTable({ rows, expanded }: { rows: CompetitorRankData[]; expanded: boolean }) {
   const hourKeys = useMemo(() => {
-    const allKeys = Array.from({ length: 24 }, (_, i) => `hour_${String(i).padStart(2, '0')}` as const)
+    const allKeys = Array.from({ length: 24 }, (_, i) => `hour_${String(i).padStart(2, '0')}` as HourKey)
     if (expanded) return allKeys
     return allKeys.slice(9, 19) // 09시 ~ 18시
   }, [expanded])
@@ -402,7 +404,7 @@ function DetailTable({ rows, expanded }: { rows: CompetitorRankData[]; expanded:
                 <td className="px-4 py-3 text-gray-700 text-[0.9em]">{formatNumber(row.average)}</td>
                 {hourKeys.map((k) => (
                   <td key={k} className="px-2 py-3 text-right text-gray-700 text-[0.9em]">
-                    {formatHour(row[k] as number)}
+                    {formatHour(row[k])}
                   </td>
                 ))}
               </tr>
