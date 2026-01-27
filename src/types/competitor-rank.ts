@@ -53,7 +53,7 @@ export interface AnalysisResult {
 export interface ClaudeInsight {
   overall_health: string[]
   media_asymmetry: string[]
-  competitor_dynamics: string[]
-  golden_time: string[]
+  competitor_dynamics: Record<string, string[] | string>
+  golden_time: Record<string, string | string[]>
   action_items: string[]
 }

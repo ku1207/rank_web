@@ -23,13 +23,13 @@ export function Header() {
             href="/page1" 
             className="text-gray-600 hover:text-gray-900 transition-colors"
           >
-            Page1
+            업로드
           </Link>
           <Link 
             href="/page2" 
             className="text-gray-600 hover:text-gray-900 transition-colors"
           >
-            Page2
+            결과
           </Link>
           <Link 
             href="/page3" 

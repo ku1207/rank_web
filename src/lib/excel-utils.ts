@@ -187,6 +187,40 @@ function calculateCompetitionIntensity(data: CompetitorRankData[]): number {
   return Math.min(intensity, 5)
 }
 
+function normalizeCompetitorDynamics(raw: ClaudeInsight['competitor_dynamics']): { label: string; items: string[] }[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return [{ label: '경쟁 그룹', items: raw.filter(Boolean) }]
+  if (typeof raw === 'object') {
+    return Object.entries(raw).map(([label, value]) => ({
+      label,
+      items: Array.isArray(value)
+        ? value.filter(Boolean)
+        : typeof value === 'string'
+        ? [value]
+        : [],
+    }))
+  }
+  return []
+}
+
+function normalizeGoldenTime(raw: ClaudeInsight['golden_time']): { label: string; value: string }[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) {
+    return raw.map((value, idx) => ({
+      label: `구간 ${idx + 1}`,
+      value: Array.isArray(value) ? value.filter(Boolean).join('\n') : String(value),
+    }))
+  }
+  if (typeof raw === 'object') {
+    return Object.entries(raw).map(([label, value]) => ({
+      label,
+      value: Array.isArray(value) ? value.filter(Boolean).join('\n') : (value as string) || '-',
+    }))
+  }
+  if (typeof raw === 'string') return [{ label: '구간', value: raw }]
+  return []
+}
+
 /**
  * Dashboard & Insight 시트 생성
  */
@@ -273,16 +307,21 @@ function createDashboardSheet(
   sheetData.push([])
 
   sheetData.push(['순위 변동'])
-  // competitor_dynamics가 배열이므로 각 항목을 개별 행으로 추가
-  insight.competitor_dynamics.forEach(item => {
-    sheetData.push([item])
+  const competitorEntries = normalizeCompetitorDynamics(insight.competitor_dynamics)
+  competitorEntries.forEach(group => {
+    sheetData.push([group.label])
+    if (group.items.length) {
+      group.items.forEach(item => sheetData.push([`- ${item}`]))
+    } else {
+      sheetData.push(['-'])
+    }
   })
   sheetData.push([])
 
   sheetData.push(['최적 입찰시간대'])
-  // golden_time이 배열이므로 각 항목을 개별 행으로 추가
-  insight.golden_time.forEach(item => {
-    sheetData.push([item])
+  const goldenEntries = normalizeGoldenTime(insight.golden_time)
+  goldenEntries.forEach(item => {
+    sheetData.push([`${item.label}: ${item.value || '-'}`])
   })
   sheetData.push([])
 
