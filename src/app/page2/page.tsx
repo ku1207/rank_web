@@ -11,10 +11,10 @@ const STORAGE_KEY = 'analysisPayload'
 type TabKey = 'insight' | 'advertiser' | 'pc' | 'mobile'
 
 const navLabels: Record<TabKey, string> = {
-  insight: '인사이트',
-  advertiser: '광고주별 순위 비교',
-  pc: 'PC 경쟁 강도',
-  mobile: 'Mobile 경쟁 강도',
+  insight: '핵심 발견 사항',
+  advertiser: '광고주별 평균 순위',
+  pc: 'PC 순위 RAW',
+  mobile: 'Mobile 순위 RAW',
 }
 
 type AdvertiserComparisonRow = {
@@ -196,7 +196,7 @@ export default function Page2() {
         <div className="grid gap-6 lg:grid-cols-[260px,1fr] items-start">
           <div className="rounded-3xl bg-slate-900 text-white p-5 shadow-lg border border-slate-800">
             <div className="flex flex-col gap-2">
-              <SideNavButton active={activeTab === 'insight'} label="인사이트" onClick={() => {
+              <SideNavButton active={activeTab === 'insight'} label="핵심 발견 사항" onClick={() => {
                 setActiveTab('insight')
                 setIsInsightOpen((prev) => !prev)
                 setVisibleInsightSection(null)
@@ -220,15 +220,15 @@ export default function Page2() {
                   ))}
                 </div>
               </div>
-              <SideNavButton active={activeTab === 'advertiser'} label="광고주별 순위 비교" onClick={() => {
+              <SideNavButton active={activeTab === 'advertiser'} label="광고주별 평균 순위" onClick={() => {
                 setActiveTab('advertiser')
                 setIsInsightOpen(false)
               }} />
-              <SideNavButton active={activeTab === 'pc'} label="PC 경쟁 강도" onClick={() => {
+              <SideNavButton active={activeTab === 'pc'} label="PC 순위 RAW" onClick={() => {
                 setActiveTab('pc')
                 setIsInsightOpen(false)
               }} />
-              <SideNavButton active={activeTab === 'mobile'} label="Mobile 경쟁 강도" onClick={() => {
+              <SideNavButton active={activeTab === 'mobile'} label="Mobile 순위 RAW" onClick={() => {
                 setActiveTab('mobile')
                 setIsInsightOpen(false)
               }} />
@@ -324,22 +324,22 @@ function ContentHeader({ label }: { label: string }) {
 }
 
 const insightSubItems = [
-  { id: 'insight-overall', label: '전체 분석' },
-  { id: 'insight-media', label: '매체 비대칭' },
-  { id: 'insight-competitor', label: '경쟁 그룹 동향' },
-  { id: 'insight-golden', label: '최적 입찰시간대' },
-  { id: 'insight-actions', label: '입찰 전략' },
+  { id: 'insight-overall', label: '매체 노출 현황' },
+  { id: 'insight-media', label: '디바이스별 운영 현황' },
+  { id: 'insight-competitor', label: '광고주 노출 현황' },
+  { id: 'insight-golden', label: '입찰 유효 구간 분석' },
+  { id: 'insight-actions', label: '최적화 가이드' },
 ]
 
 function InsightSection({ insight, visible }: { insight: NormalizedInsight; visible: string | null }) {
   const sections = [
     {
       id: 'insight-overall',
-      node: <InsightList title="전체 분석" items={insight.overall} tone="blue" fullSpan />,
+      node: <InsightList title="매체 노출 현황" items={insight.overall} tone="blue" fullSpan />,
     },
     {
       id: 'insight-media',
-      node: <InsightList title="매체 비대칭" items={insight.media} tone="violet" />,
+      node: <InsightList title="디바이스별 운영 현황" items={insight.media} tone="violet" />,
     },
     {
       id: 'insight-competitor',
@@ -351,7 +351,7 @@ function InsightSection({ insight, visible }: { insight: NormalizedInsight; visi
     },
     {
       id: 'insight-actions',
-      node: <InsightList title="입찰 전략" items={insight.actions} tone="rose" fullSpan />,
+      node: <InsightList title="최적화 가이드" items={insight.actions} tone="rose" fullSpan />,
     },
   ]
 
@@ -501,7 +501,7 @@ function CompetitorGroupList({ groups }: { groups: { label: string; items: strin
   return (
     <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 p-4 shadow-sm space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-emerald-900">경쟁 그룹 동향</h4>
+        <h4 className="text-sm font-semibold text-emerald-900">광고주 노출 현황</h4>
         <span className="text-xs font-semibold text-emerald-700">{groups.length}개 그룹</span>
       </div>
       <div className="grid grid-cols-1 gap-3">
@@ -533,7 +533,7 @@ function GoldenTimeList({ items }: { items: { label: string; value: string }[] }
   return (
     <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50 p-4 shadow-sm space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-amber-900">최적 입찰시간대</h4>
+        <h4 className="text-sm font-semibold text-amber-900">입찰 유효 구간 분석</h4>
         <span className="text-xs font-semibold text-amber-700">{items.length}개 구간</span>
       </div>
       {items.length ? (
@@ -602,7 +602,6 @@ function AdvertiserTable({ rows }: { rows: AdvertiserComparisonRow[] }) {
               <th className="px-4 py-3">URL</th>
               <th className="px-4 py-3">PC 평균</th>
               <th className="px-4 py-3">Mobile 평균</th>
-              <th className="px-4 py-3">차이(절댓값)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -614,12 +613,11 @@ function AdvertiserTable({ rows }: { rows: AdvertiserComparisonRow[] }) {
                 </td>
                 <td className="px-4 py-3 text-gray-700">{formatNumberOrDash(row.pcAvg)}</td>
                 <td className="px-4 py-3 text-gray-700">{formatNumberOrDash(row.mobileAvg)}</td>
-                <td className="px-4 py-3 text-gray-700">{formatNumberOrDash(row.diff)}</td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">표시할 광고주 데이터가 없습니다.</td>
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-500">표시할 광고주 데이터가 없습니다.</td>
               </tr>
             )}
           </tbody>
