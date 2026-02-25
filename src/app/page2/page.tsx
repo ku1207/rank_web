@@ -82,7 +82,6 @@ export default function Page2() {
   const [rawData, setRawData] = useState<CompetitorRankData[]>([])
   const [insight, setInsight] = useState<ClaudeInsight | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('insight')
-  const [isInsightOpen, setIsInsightOpen] = useState(false)
   const [visibleInsightSection, setVisibleInsightSection] = useState<string | null>(null)
   const [pcExpanded, setPcExpanded] = useState(false)
   const [mobileExpanded, setMobileExpanded] = useState(false)
@@ -163,7 +162,7 @@ export default function Page2() {
 
   return (
     <div className="min-h-[calc(100vh-65px)] px-6 py-10 bg-[#f5f5f7]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-gray-900">경쟁사 순위 분석 결과</h1>
         </div>
@@ -193,87 +192,94 @@ export default function Page2() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[260px,1fr] items-start">
-          <div className="rounded-3xl bg-slate-900 text-white p-5 shadow-lg border border-slate-800">
-            <div className="flex flex-col gap-2">
-              <SideNavButton active={activeTab === 'insight'} label="핵심 발견 사항" onClick={() => {
-                setActiveTab('insight')
-                setIsInsightOpen((prev) => !prev)
+        {/* 수평 탭 네비게이션 */}
+        <div className="flex gap-2 bg-white rounded-2xl p-1.5 shadow-sm border border-gray-200">
+          {(['insight', 'advertiser', 'pc', 'mobile'] as TabKey[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => {
+                setActiveTab(key)
                 setVisibleInsightSection(null)
-              }} />
-              <div
-                className={`overflow-hidden transition-[max-height] duration-300 ${
-                  activeTab === 'insight' && isInsightOpen ? 'max-h-72' : 'max-h-0'
+              }}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === key
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'text-slate-600 hover:bg-gray-100'
+              }`}
+            >
+              {navLabels[key]}
+            </button>
+          ))}
+        </div>
+
+        {/* 인사이트 세부 필터 */}
+        {activeTab === 'insight' && (
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setVisibleInsightSection(null)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                visibleInsightSection === null
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              전체
+            </button>
+            {insightSubItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setVisibleInsightSection(visibleInsightSection === item.id ? null : item.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  visibleInsightSection === item.id
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                <div className="mt-1 ml-6 flex flex-col gap-1">
-                  {insightSubItems.map((item) => (
-                    <SubNavButton
-                      key={item.id}
-                      label={item.label}
-                      active={visibleInsightSection === item.id}
-                      onClick={() => {
-                        setActiveTab('insight')
-                        setVisibleInsightSection(item.id)
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <SideNavButton active={activeTab === 'advertiser'} label="광고주별 평균 순위" onClick={() => {
-                setActiveTab('advertiser')
-                setIsInsightOpen(false)
-              }} />
-              <SideNavButton active={activeTab === 'pc'} label="PC 순위 RAW" onClick={() => {
-                setActiveTab('pc')
-                setIsInsightOpen(false)
-              }} />
-              <SideNavButton active={activeTab === 'mobile'} label="Mobile 순위 RAW" onClick={() => {
-                setActiveTab('mobile')
-                setIsInsightOpen(false)
-              }} />
-            </div>
+                {item.label}
+              </button>
+            ))}
           </div>
+        )}
 
-          <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-            <div className="p-6 space-y-4">
-              {activeTab === 'insight' && (
-                <>
-                  <ContentHeader label={navLabels.insight} />
-                  <InsightSection insight={normalizedInsight} visible={visibleInsightSection} />
-                </>
-              )}
-              {activeTab === 'advertiser' && (
-                <>
-                  <ContentHeader label={navLabels.advertiser} />
-                  <AdvertiserTable rows={advertiserRows} />
-                </>
-              )}
-              {activeTab === 'pc' && (
-                <>
-                  <div className="flex items-center gap-3">
-                    <ContentHeader label={navLabels.pc} />
-                    <Button variant="outline" size="sm" onClick={() => setPcExpanded((prev) => !prev)} className="text-xs">펼쳐보기</Button>
-                  </div>
-                  <DetailTable
-                    rows={rawData.filter((r) => r.ad_area === 'PC')}
-                    expanded={pcExpanded}
-                  />
-                </>
-              )}
-              {activeTab === 'mobile' && (
-                <>
-                  <div className="flex items-center gap-3">
-                    <ContentHeader label={navLabels.mobile} />
-                    <Button variant="outline" size="sm" onClick={() => setMobileExpanded((prev) => !prev)} className="text-xs">펼쳐보기</Button>
-                  </div>
-                  <DetailTable
-                    rows={rawData.filter((r) => r.ad_area === 'Mobile')}
-                    expanded={mobileExpanded}
-                  />
-                </>
-              )}
-            </div>
+        {/* 전체 너비 콘텐츠 영역 */}
+        <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+          <div className="p-6 space-y-4">
+            {activeTab === 'insight' && (
+              <>
+                <ContentHeader label={navLabels.insight} />
+                <InsightSection insight={normalizedInsight} visible={visibleInsightSection} />
+              </>
+            )}
+            {activeTab === 'advertiser' && (
+              <>
+                <ContentHeader label={navLabels.advertiser} />
+                <AdvertiserTable rows={advertiserRows} />
+              </>
+            )}
+            {activeTab === 'pc' && (
+              <>
+                <div className="flex items-center gap-3">
+                  <ContentHeader label={navLabels.pc} />
+                  <Button variant="outline" size="sm" onClick={() => setPcExpanded((prev) => !prev)} className="text-xs">펼쳐보기</Button>
+                </div>
+                <DetailTable
+                  rows={rawData.filter((r) => r.ad_area === 'PC')}
+                  expanded={pcExpanded}
+                />
+              </>
+            )}
+            {activeTab === 'mobile' && (
+              <>
+                <div className="flex items-center gap-3">
+                  <ContentHeader label={navLabels.mobile} />
+                  <Button variant="outline" size="sm" onClick={() => setMobileExpanded((prev) => !prev)} className="text-xs">펼쳐보기</Button>
+                </div>
+                <DetailTable
+                  rows={rawData.filter((r) => r.ad_area === 'Mobile')}
+                  expanded={mobileExpanded}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -281,38 +287,6 @@ export default function Page2() {
   )
 }
 
-function SideNavButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all border ${
-        active
-          ? 'bg-white text-slate-900 border-transparent shadow-md'
-          : 'bg-white/5 text-slate-100 border-white/10 hover:bg-white/10'
-      }`}
-    >
-      <span className={`h-2 w-2 rounded-full ${active ? 'bg-blue-600' : 'bg-slate-400'}`} aria-hidden />
-      <span className="flex-1 text-left">{label}</span>
-      <span className={`text-[11px] ${active ? 'text-slate-500' : 'text-slate-500/70'}`}>▶</span>
-    </button>
-  )
-}
-
-function SubNavButton({ label, onClick, active }: { label: string; onClick: () => void; active?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
-        active
-          ? 'bg-white/15 text-white'
-          : 'text-slate-100/90 hover:bg-white/10'
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-blue-400' : 'bg-slate-400'}`} aria-hidden />
-      <span className="flex-1 text-left">{label}</span>
-    </button>
-  )
-}
 
 function ContentHeader({ label }: { label: string }) {
   return (
