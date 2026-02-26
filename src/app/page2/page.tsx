@@ -32,6 +32,17 @@ const CHART_COLORS = [
 
 const MODAL_PAGE_SIZE = 5
 
+// 비딩 스케줄 색상 팔레트
+const SCHEDULE_COLORS = ['#5c6bc0', '#aed581', '#4dd0e1', '#d4e157', '#7986cb'] as const
+const SCHEDULE_HOURS = Array.from({ length: 24 }, (_, i) => i)
+
+type ScheduleItem = {
+  adOn: boolean
+  targetRank: string
+  maxCpc: string
+  minCpc: string
+}
+
 function getDefaultDates() {
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -96,12 +107,22 @@ export default function Page2() {
   // 검색 결과
   const [hasSearched, setHasSearched] = useState(false)
   const [chartTab, setChartTab] = useState<'PC' | 'Mobile'>('PC')
-  const [checkedRows, setCheckedRows] = useState<Set<string>>(new Set())
 
   // AI 추천 순위
   const [isAiPopupOpen, setIsAiPopupOpen] = useState(false)
   const [aiExcludeAdvertiser, setAiExcludeAdvertiser] = useState('없음')
   const [aiTargetRanks, setAiTargetRanks] = useState<number[] | null>(null)
+
+  // 비딩 스케줄 등록
+  const [isBiddingOpen, setIsBiddingOpen] = useState(false)
+  const [biddingTitle, setBiddingTitle] = useState('')
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>(
+    SCHEDULE_COLORS.map(() => ({ adOn: true, targetRank: '5', maxCpc: '', minCpc: '' })),
+  )
+  const [activeColorIdx, setActiveColorIdx] = useState(0)
+  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [scheduleGrid, setScheduleGrid] = useState<Record<string, number>>({})
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     try {
@@ -210,7 +231,6 @@ export default function Page2() {
   const handleSearch = () => {
     if (!adAreaPc && !adAreaMobile) return
     setHasSearched(true)
-    setCheckedRows(new Set())
     setAiTargetRanks(null)
   }
 
@@ -225,12 +245,39 @@ export default function Page2() {
     setAiTargetRanks(null)
   }, [chartTab])
 
-  const handleAllCheck = () => {
-    if (checkedRows.size === searchedData.length && searchedData.length > 0) {
-      setCheckedRows(new Set())
-    } else {
-      setCheckedRows(new Set(searchedData.map((_, i) => String(i))))
-    }
+  const handleDownload = () => {
+    const headers = [
+      '키워드', '광고 영역', '광고주', '평균',
+      ...HOUR_KEYS.map(h => h.replace('hour_', '') + '시'),
+    ]
+    const rows = searchedData.map(row => [
+      row.keyword, row.ad_area, row.advertiser,
+      row.average > 0 ? row.average.toFixed(2) : '-',
+      ...HOUR_KEYS.map(h => row[h] > 0 ? row[h].toFixed(1) : '-'),
+    ])
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v)}"`).join(','))
+      .join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `rank_data_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCellInteract = (dayIdx: number, hour: number) => {
+    const cellKey = `${dayIdx}-${hour}`
+    setScheduleGrid(prev => {
+      const next = { ...prev }
+      if (isDeleteMode) {
+        delete next[cellKey]
+      } else {
+        next[cellKey] = activeColorIdx
+      }
+      return next
+    })
   }
 
   if (isLoading) {
@@ -386,10 +433,15 @@ export default function Page2() {
                   </button>
                 ))}
               </div>
-              <LineChart data={chartData} adArea={chartTab} aiTargetRanks={aiTargetRanks} />
+              <LineChart
+                data={chartData}
+                adArea={chartTab}
+                aiTargetRanks={aiTargetRanks}
+                onRemoveAiTargetRanks={() => setAiTargetRanks(null)}
+              />
 
-              {/* AI 추천 순위 버튼 */}
-              <div className="mt-5 flex justify-center border-t border-gray-100 pt-4">
+              {/* 하단 버튼 */}
+              <div className="mt-5 flex items-center justify-center gap-3 border-t border-gray-100 pt-4">
                 <button
                   onClick={() => {
                     setAiExcludeAdvertiser('없음')
@@ -399,27 +451,38 @@ export default function Page2() {
                 >
                   AI 추천 순위
                 </button>
+                <button
+                  onClick={() => {
+                    setScheduleGrid({})
+                    setActiveColorIdx(0)
+                    setIsDeleteMode(false)
+                    setIsBiddingOpen(true)
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-5 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                >
+                  비딩 스케줄 등록
+                </button>
               </div>
             </div>
 
             {/* RAW 테이블 */}
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-5 py-3.5">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
                 <h3 className="text-sm font-semibold text-gray-700">데이터 원본</h3>
+                <button
+                  onClick={handleDownload}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  다운로드
+                </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50">
                     <tr className="text-gray-600">
-                      <th className="px-3 py-3 text-center">
-                        <Checkbox
-                          checked={
-                            searchedData.length > 0 &&
-                            checkedRows.size === searchedData.length
-                          }
-                          onCheckedChange={handleAllCheck}
-                        />
-                      </th>
                       <th className="whitespace-nowrap px-3 py-3 text-left font-semibold">
                         키워드
                       </th>
@@ -443,27 +506,11 @@ export default function Page2() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {searchedData.map((row, idx) => {
-                      const key = String(idx)
-                      return (
+                    {searchedData.map((row, idx) => (
                         <tr
-                          key={key}
-                          className={`transition-colors hover:bg-gray-50 ${
-                            checkedRows.has(key) ? 'bg-blue-50' : ''
-                          }`}
+                          key={idx}
+                          className="transition-colors hover:bg-gray-50"
                         >
-                          <td className="px-3 py-2.5 text-center">
-                            <Checkbox
-                              checked={checkedRows.has(key)}
-                              onCheckedChange={() =>
-                                setCheckedRows(prev => {
-                                  const next = new Set(prev)
-                                  if (next.has(key)) { next.delete(key) } else { next.add(key) }
-                                  return next
-                                })
-                              }
-                            />
-                          </td>
                           <td className="whitespace-nowrap px-3 py-2.5 text-gray-700">
                             {row.keyword}
                           </td>
@@ -485,12 +532,11 @@ export default function Page2() {
                             </td>
                           ))}
                         </tr>
-                      )
-                    })}
+                    ))}
                     {searchedData.length === 0 && (
                       <tr>
                         <td
-                          colSpan={5 + HOUR_KEYS.length}
+                          colSpan={4 + HOUR_KEYS.length}
                           className="px-4 py-8 text-center text-gray-400"
                         >
                           검색 결과가 없습니다.
@@ -619,6 +665,224 @@ export default function Page2() {
         </DialogContent>
       </Dialog>
 
+      {/* ── 비딩 스케줄 등록 팝업 ── */}
+      <Dialog open={isBiddingOpen} onOpenChange={setIsBiddingOpen}>
+        <DialogContent className="max-w-5xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-gray-100 px-6 py-4">
+            <DialogTitle>스케줄 설정</DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[80vh] flex-col gap-5 overflow-y-auto px-6 py-5">
+
+            {/* 제목 */}
+            <div className="flex items-center gap-3">
+              <span className="w-16 shrink-0 text-sm font-semibold text-gray-700">제목</span>
+              <Input
+                placeholder="스케줄 제목 입력"
+                value={biddingTitle}
+                onChange={e => setBiddingTitle(e.target.value)}
+                className="max-w-xs"
+              />
+            </div>
+
+            {/* 스케줄 항목 (5개 색상별 설정) */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-gray-700">스케줄 항목</p>
+              <div className="overflow-hidden rounded-lg border border-gray-200">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr className="text-gray-600">
+                      <th className="px-3 py-2 text-center font-semibold">색상</th>
+                      <th className="px-3 py-2 text-center font-semibold">광고 ON/OFF</th>
+                      <th className="px-3 py-2 text-center font-semibold">목표 순위</th>
+                      <th className="px-3 py-2 text-center font-semibold">최대 CPC</th>
+                      <th className="px-3 py-2 text-center font-semibold">최소 CPC</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {SCHEDULE_COLORS.map((color, i) => (
+                      <tr key={i} className={activeColorIdx === i && !isDeleteMode ? 'bg-blue-50' : ''}>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => { setActiveColorIdx(i); setIsDeleteMode(false) }}
+                            className="inline-block h-5 w-5 rounded-full transition-all"
+                            style={{
+                              backgroundColor: color,
+                              boxShadow: activeColorIdx === i && !isDeleteMode ? `0 0 0 2px #1d4ed8` : `0 0 0 2px transparent`,
+                              outline: activeColorIdx === i && !isDeleteMode ? '2px solid #1d4ed8' : '2px solid transparent',
+                              outlineOffset: '2px',
+                            }}
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => setScheduleItems(prev => {
+                              const next = [...prev]
+                              next[i] = { ...next[i], adOn: !next[i].adOn }
+                              return next
+                            })}
+                            className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                              scheduleItems[i].adOn
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {scheduleItems[i].adOn ? 'ON' : 'OFF'}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={scheduleItems[i].targetRank}
+                            onChange={e => setScheduleItems(prev => {
+                              const next = [...prev]
+                              next[i] = { ...next[i], targetRank: e.target.value }
+                              return next
+                            })}
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                          >
+                            {Array.from({ length: 10 }, (_, r) => (
+                              <option key={r + 1} value={String(r + 1)}>{r + 1}위</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            placeholder="최대 CPC"
+                            value={scheduleItems[i].maxCpc}
+                            onChange={e => setScheduleItems(prev => {
+                              const next = [...prev]
+                              next[i] = { ...next[i], maxCpc: e.target.value }
+                              return next
+                            })}
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            placeholder="최소 CPC"
+                            value={scheduleItems[i].minCpc}
+                            onChange={e => setScheduleItems(prev => {
+                              const next = [...prev]
+                              next[i] = { ...next[i], minCpc: e.target.value }
+                              return next
+                            })}
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 색상 선택 + 삭제 모드 버튼 */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-gray-700">페인트</span>
+              <div className="flex items-center gap-2">
+                {SCHEDULE_COLORS.map((color, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setActiveColorIdx(i); setIsDeleteMode(false) }}
+                    className="h-6 w-6 rounded-full transition-all"
+                    style={{
+                      backgroundColor: color,
+                      outline: activeColorIdx === i && !isDeleteMode ? '2px solid #1d4ed8' : '2px solid transparent',
+                      outlineOffset: '2px',
+                    }}
+                  />
+                ))}
+                <button
+                  onClick={() => setIsDeleteMode(d => !d)}
+                  className={`ml-2 rounded-lg border px-3 py-1 text-xs font-semibold transition-colors ${
+                    isDeleteMode
+                      ? 'border-red-300 bg-red-50 text-red-600'
+                      : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+
+            {/* 7×24 스케줄 그리드 */}
+            <div
+              className="overflow-x-auto rounded-lg border border-gray-200"
+              onMouseLeave={() => setIsDragging(false)}
+            >
+              <div
+                className="select-none"
+                onMouseUp={() => setIsDragging(false)}
+                style={{ cursor: isDeleteMode ? 'cell' : 'crosshair' }}
+              >
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 z-10 w-10 bg-gray-50 px-2 py-1.5 text-center text-xs font-medium text-gray-500">
+                        요일
+                      </th>
+                      {SCHEDULE_HOURS.map(h => (
+                        <th
+                          key={h}
+                          className="min-w-[28px] bg-gray-50 px-1 py-1.5 text-center text-xs font-medium text-gray-500"
+                        >
+                          {String(h).padStart(2, '0')}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DAYS.map((day, dayIdx) => (
+                      <tr key={dayIdx}>
+                        <td className="sticky left-0 z-10 border-r border-gray-200 bg-gray-50 px-2 py-1 text-center text-xs font-medium text-gray-600">
+                          {day}
+                        </td>
+                        {SCHEDULE_HOURS.map(hour => {
+                          const cellKey = `${dayIdx}-${hour}`
+                          const colorIdx = scheduleGrid[cellKey]
+                          const cellColor = colorIdx !== undefined ? SCHEDULE_COLORS[colorIdx] : undefined
+                          return (
+                            <td
+                              key={hour}
+                              className="border border-gray-100 p-0"
+                              style={{ backgroundColor: cellColor ?? undefined }}
+                              onMouseDown={() => {
+                                setIsDragging(true)
+                                handleCellInteract(dayIdx, hour)
+                              }}
+                              onMouseEnter={() => {
+                                if (isDragging) handleCellInteract(dayIdx, hour)
+                              }}
+                            >
+                              <div className="h-7 w-full" />
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 저장 / 취소 */}
+            <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+              <Button variant="outline" size="sm" onClick={() => setIsBiddingOpen(false)}>
+                취소
+              </Button>
+              <Button
+                size="sm"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => setIsBiddingOpen(false)}
+              >
+                저장
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ── AI 추천 순위 팝업 ── */}
       <Dialog open={isAiPopupOpen} onOpenChange={setIsAiPopupOpen}>
         <DialogContent className="max-w-sm">
@@ -680,10 +944,12 @@ function LineChart({
   data,
   adArea,
   aiTargetRanks,
+  onRemoveAiTargetRanks,
 }: {
   data: CompetitorRankData[]
   adArea: 'PC' | 'Mobile'
   aiTargetRanks?: number[] | null
+  onRemoveAiTargetRanks?: () => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(800)
@@ -881,6 +1147,19 @@ function LineChart({
                     fill="#18181b"
                     stroke="#fff"
                     strokeWidth={1.5}
+                    style={{ cursor: 'crosshair' }}
+                    onMouseEnter={e => {
+                      const rect = containerRef.current?.getBoundingClientRect()
+                      if (!rect) return
+                      setTooltip({
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top,
+                        advertiser: 'AI 추천 순위',
+                        rank: aiTargetRanks[h],
+                        hour: h,
+                      })
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
                   />
                 ))}
               </g>
@@ -934,6 +1213,15 @@ function LineChart({
               <circle cx="12" cy="6" r="3" fill="#18181b" />
             </svg>
             <span className="font-semibold text-gray-800">AI 추천 순위</span>
+            {onRemoveAiTargetRanks && (
+              <button
+                onClick={onRemoveAiTargetRanks}
+                className="ml-1 text-base leading-none text-gray-400 hover:text-gray-700"
+                title="AI 추천 순위 제거"
+              >
+                ×
+              </button>
+            )}
           </div>
         )}
       </div>
