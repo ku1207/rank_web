@@ -399,14 +399,14 @@ export default function Page2() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-65px)] px-6 py-8 bg-[#f5f5f7]">
+    <div className="min-h-[calc(100vh-65px)] px-6 py-8 bg-white">
       <div className="flex flex-col gap-6">
 
         {/* ── 페이지 타이틀 ── */}
         <h2 className="text-lg font-bold text-gray-900">경쟁사 순위 조회</h2>
 
         {/* ── 검색 영역 ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-gray-100 rounded-2xl border border-gray-200 shadow-sm p-6">
           <div className="flex flex-col gap-5">
 
             {/* 키워드 */}
@@ -532,7 +532,7 @@ export default function Page2() {
             <Button
               onClick={handleSearch}
               disabled={!adAreaPc && !adAreaMobile}
-              className="bg-blue-600 px-8 text-white hover:bg-blue-700"
+              className="bg-gray-500 px-8 text-white hover:bg-gray-600"
             >
               검색
             </Button>
@@ -621,7 +621,7 @@ export default function Page2() {
                 <h3 className="text-sm font-semibold text-gray-700">데이터 원본</h3>
                 <button
                   onClick={handleDownload}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
