@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import type { CompetitorRankData } from '@/types/competitor-rank'
+import type { AiRankInsight, CompetitorRankData } from '@/types/competitor-rank'
 
 const STORAGE_KEY = 'analysisPayload'
 
@@ -52,39 +52,6 @@ function getDefaultDates() {
   return { start: fmt(startOfMonth), end: fmt(yesterday) }
 }
 
-/**
- * 광고 경쟁 환경 기반 최적 노출 순위(TargetRank) 산출
- * - N_t (경쟁자 수) 많을수록 → 순위 보수적 (숫자 커짐)
- * - σ_t (순위 변동성, STDEV.P) 클수록 → 순위 공격적 (숫자 작아짐)
- * - 공식: round(N_t / 2 − σ_t), clamp(1 ~ maxRank)
- * - 데이터 없는 시간대 기본값: 1
- */
-function computeTargetRanks(
-  data: CompetitorRankData[],
-  excludeAdvertiser: string,
-  adArea: 'PC' | 'Mobile',
-): number[] {
-  const maxRank = adArea === 'PC' ? 10 : 5
-  const sourceData =
-    excludeAdvertiser === '없음'
-      ? data.filter(r => r.ad_area === adArea)
-      : data.filter(r => r.ad_area === adArea && r.advertiser !== excludeAdvertiser)
-
-  return Array.from({ length: 24 }, (_, h) => {
-    const key = `hour_${String(h).padStart(2, '0')}` as HourKey
-    const ranks = sourceData.filter(r => r[key] > 0).map(r => r[key])
-    if (ranks.length === 0) return 1
-
-    const N = ranks.length
-    const mean = ranks.reduce((s, r) => s + r, 0) / N
-    const variance = ranks.reduce((s, r) => s + (r - mean) ** 2, 0) / N
-    const sigma = Math.sqrt(variance)
-
-    const raw = N / 2 - sigma
-    return Math.min(Math.max(Math.round(raw), 1), maxRank)
-  })
-}
-
 export default function Page2() {
   const router = useRouter()
   const [rawData, setRawData] = useState<CompetitorRankData[]>([])
@@ -112,6 +79,8 @@ export default function Page2() {
   const [isAiPopupOpen, setIsAiPopupOpen] = useState(false)
   const [aiExcludeAdvertiser, setAiExcludeAdvertiser] = useState('없음')
   const [aiTargetRanks, setAiTargetRanks] = useState<number[] | null>(null)
+  const [aiReason, setAiReason] = useState<string[] | null>(null)
+  const [isAiLoading, setIsAiLoading] = useState(false)
 
   // 비딩 스케줄 등록
   const [isBiddingOpen, setIsBiddingOpen] = useState(false)
@@ -232,17 +201,46 @@ export default function Page2() {
     if (!adAreaPc && !adAreaMobile) return
     setHasSearched(true)
     setAiTargetRanks(null)
+    setAiReason(null)
   }
 
-  const handleAiConfirm = () => {
-    const ranks = computeTargetRanks(searchedData, aiExcludeAdvertiser, chartTab)
-    setAiTargetRanks(ranks)
+  const handleAiConfirm = async () => {
     setIsAiPopupOpen(false)
+    setIsAiLoading(true)
+    setAiTargetRanks(null)
+    setAiReason(null)
+    try {
+      const payload = searchedData.filter(r => {
+        if (r.ad_area !== chartTab) return false
+        if (aiExcludeAdvertiser !== '없음' && r.advertiser === aiExcludeAdvertiser) return false
+        return true
+      })
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: payload }),
+      })
+      const json = await res.json() as { insight?: AiRankInsight; error?: string }
+      if (json.insight) {
+        const schedule = json.insight.optimalRankSchedule
+        const ranks = Array.from({ length: 24 }, (_, h) => {
+          const key = `hour${String(h).padStart(2, '0')}`
+          return parseInt(schedule[key] ?? '1', 10) || 1
+        })
+        setAiTargetRanks(ranks)
+        setAiReason(json.insight.optimalRankScheduleReason ?? null)
+      }
+    } catch (e) {
+      console.error('AI 추천 순위 오류:', e)
+    } finally {
+      setIsAiLoading(false)
+    }
   }
 
   // 탭 전환 시 AI 추천 순위 초기화
   useEffect(() => {
     setAiTargetRanks(null)
+    setAiReason(null)
   }, [chartTab])
 
   const handleDownload = () => {
@@ -437,7 +435,7 @@ export default function Page2() {
                 data={chartData}
                 adArea={chartTab}
                 aiTargetRanks={aiTargetRanks}
-                onRemoveAiTargetRanks={() => setAiTargetRanks(null)}
+                onRemoveAiTargetRanks={() => { setAiTargetRanks(null); setAiReason(null) }}
               />
 
               {/* 하단 버튼 */}
@@ -447,9 +445,18 @@ export default function Page2() {
                     setAiExcludeAdvertiser('없음')
                     setIsAiPopupOpen(true)
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
+                  disabled={isAiLoading}
+                  className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  AI 추천 순위
+                  {isAiLoading ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      분석 중...
+                    </>
+                  ) : 'AI 추천 순위'}
                 </button>
                 <button
                   onClick={() => {
@@ -463,6 +470,21 @@ export default function Page2() {
                   비딩 스케줄 등록
                 </button>
               </div>
+
+              {/* AI 분석 근거 */}
+              {aiReason && aiReason.length > 0 && (
+                <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50 px-5 py-4">
+                  <p className="mb-2.5 text-xs font-semibold text-violet-700">AI 분석 근거</p>
+                  <ul className="flex flex-col gap-1.5">
+                    {aiReason.map((r, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs leading-relaxed text-violet-900">
+                        <span className="mt-0.5 shrink-0 text-violet-400">•</span>
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             {/* RAW 테이블 */}
