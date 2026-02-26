@@ -32,6 +32,13 @@ const CHART_COLORS = [
 
 const MODAL_PAGE_SIZE = 5
 
+// 키워드 모달 더미 데이터 (실제 데이터가 부족할 때 항상 페이지네이션이 보이도록)
+const DUMMY_KEYWORDS = [
+  '등산화 추천', '런닝화 남성', '골프화 여성', '운동화 브랜드',
+  '트레킹화 방수', '축구화 아디다스', '농구화 나이키', '실내화 슬리퍼',
+  '캠핑화 등산', '스포츠화 세일', '편한화 워킹', '방한화 겨울',
+]
+
 // 비딩 스케줄 색상 팔레트
 const SCHEDULE_COLORS = ['#5c6bc0', '#aed581', '#4dd0e1', '#d4e157', '#7986cb'] as const
 const SCHEDULE_HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -70,6 +77,8 @@ export default function Page2() {
   const [keywordSearchText, setKeywordSearchText] = useState('')
   const [tempSelectedKeywords, setTempSelectedKeywords] = useState<string[]>([])
   const [modalPage, setModalPage] = useState(1)
+  const [isKeywordGuideOpen, setIsKeywordGuideOpen] = useState(false)
+  const [isKeywordLimitOpen, setIsKeywordLimitOpen] = useState(false)
 
   // 검색 결과
   const [hasSearched, setHasSearched] = useState(false)
@@ -107,10 +116,10 @@ export default function Page2() {
     }
   }, [router])
 
-  const allKeywords = useMemo(
-    () => Array.from(new Set(rawData.map(d => d.keyword))),
-    [rawData],
-  )
+  const allKeywords = useMemo(() => {
+    const real = Array.from(new Set(rawData.map(d => d.keyword)))
+    return Array.from(new Set([...real, ...DUMMY_KEYWORDS]))
+  }, [rawData])
 
   const filteredModalKeywords = useMemo(() => {
     if (!keywordSearchText.trim()) return allKeywords
@@ -156,9 +165,11 @@ export default function Page2() {
   }
 
   const handleKeywordToggle = (kw: string) => {
-    setTempSelectedKeywords(prev =>
-      prev.includes(kw) ? prev.filter(k => k !== kw) : [...prev, kw],
-    )
+    setTempSelectedKeywords(prev => {
+      if (prev.includes(kw)) return prev.filter(k => k !== kw)
+      if (prev.length >= 5) { setIsKeywordLimitOpen(true); return prev }
+      return [...prev, kw]
+    })
   }
 
   const handleKeywordConfirm = () => {
@@ -303,13 +314,38 @@ export default function Page2() {
 
         {/* ── 검색 영역 ── */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <h2 className="mb-5 text-base font-bold text-gray-900">경쟁사 순위 조회</h2>
           <div className="flex flex-col gap-5">
 
             {/* 키워드 */}
             <div className="flex items-start gap-4">
-              <span className="w-20 shrink-0 pt-1 text-sm font-semibold text-gray-700">
-                키워드
-              </span>
+              <div className="relative w-20 shrink-0">
+                <div className="flex items-center gap-1 pt-1">
+                  <span className="text-sm font-semibold text-gray-700">키워드</span>
+                  <button
+                    onClick={() => setIsKeywordGuideOpen(v => !v)}
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-gray-400 text-[10px] font-bold text-gray-400 transition-colors hover:border-blue-400 hover:text-blue-500"
+                  >
+                    ?
+                  </button>
+                </div>
+                {isKeywordGuideOpen && (
+                  <div className="absolute left-0 top-8 z-30 w-60 rounded-xl border border-gray-200 bg-white p-4 shadow-xl">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-bold text-gray-800">조회 가능 키워드</p>
+                      <button
+                        onClick={() => setIsKeywordGuideOpen(false)}
+                        className="text-base leading-none text-gray-400 hover:text-gray-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="text-xs leading-relaxed text-gray-500">
+                      에이비딩을 통해 비딩을 진행한 이력이 있는 키워드들을 조회할 수 있습니다.
+                    </p>
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 flex-1">
                 {selectedKeywords.map(kw => (
                   <span
@@ -588,7 +624,7 @@ export default function Page2() {
                 setModalPage(1)
               }}
             />
-            <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200">
+            <div className="rounded-lg border border-gray-200">
               <table className="min-w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50">
                   <tr>
@@ -633,7 +669,7 @@ export default function Page2() {
               </table>
             </div>
             {/* 페이지네이션 */}
-            {modalTotalPages > 1 && (
+            {(
               <div className="flex items-center justify-between border-t border-gray-100 pt-2">
                 <span className="text-xs text-gray-400">
                   {filteredModalKeywords.length}개 중{' '}
@@ -661,7 +697,6 @@ export default function Page2() {
                 </div>
               </div>
             )}
-
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-gray-500">
                 {tempSelectedKeywords.length}개 선택됨
@@ -683,6 +718,30 @@ export default function Page2() {
                 </Button>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── 키워드 5개 초과 경고 팝업 ── */}
+      <Dialog open={isKeywordLimitOpen} onOpenChange={setIsKeywordLimitOpen}>
+        <DialogContent className="max-w-xs text-center">
+          <DialogHeader>
+            <DialogTitle className="text-center">키워드 등록 제한</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-5 py-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+              <svg className="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <p className="text-sm text-gray-700">키워드는 5개까지만 등록이 가능합니다.</p>
+            <Button
+              size="sm"
+              className="w-full bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => setIsKeywordLimitOpen(false)}
+            >
+              확인
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
