@@ -30,6 +30,8 @@ const CHART_COLORS = [
   '#f97316', '#06b6d4', '#84cc16', '#ec4899', '#64748b',
 ]
 
+const MODAL_PAGE_SIZE = 5
+
 function getDefaultDates() {
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -56,6 +58,7 @@ export default function Page2() {
   const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false)
   const [keywordSearchText, setKeywordSearchText] = useState('')
   const [tempSelectedKeywords, setTempSelectedKeywords] = useState<string[]>([])
+  const [modalPage, setModalPage] = useState(1)
 
   // 검색 결과
   const [hasSearched, setHasSearched] = useState(false)
@@ -88,6 +91,13 @@ export default function Page2() {
     )
   }, [allKeywords, keywordSearchText])
 
+  const modalTotalPages = Math.max(1, Math.ceil(filteredModalKeywords.length / MODAL_PAGE_SIZE))
+
+  const pagedModalKeywords = useMemo(() => {
+    const start = (modalPage - 1) * MODAL_PAGE_SIZE
+    return filteredModalKeywords.slice(start, start + MODAL_PAGE_SIZE)
+  }, [filteredModalKeywords, modalPage])
+
   const searchedData = useMemo(() => {
     if (!hasSearched) return []
     return rawData.filter(row => {
@@ -108,6 +118,7 @@ export default function Page2() {
   const handleOpenModal = () => {
     setTempSelectedKeywords([...selectedKeywords])
     setKeywordSearchText('')
+    setModalPage(1)
     setIsKeywordModalOpen(true)
   }
 
@@ -320,7 +331,7 @@ export default function Page2() {
                   </button>
                 ))}
               </div>
-              <LineChart data={chartData} />
+              <LineChart data={chartData} adArea={chartTab} />
             </div>
 
             {/* RAW 테이블 */}
@@ -436,7 +447,10 @@ export default function Page2() {
             <Input
               placeholder="키워드 검색..."
               value={keywordSearchText}
-              onChange={e => setKeywordSearchText(e.target.value)}
+              onChange={e => {
+                setKeywordSearchText(e.target.value)
+                setModalPage(1)
+              }}
             />
             <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200">
               <table className="min-w-full text-sm">
@@ -461,7 +475,7 @@ export default function Page2() {
                       </td>
                     </tr>
                   ) : (
-                    filteredModalKeywords.map(kw => (
+                    pagedModalKeywords.map(kw => (
                       <tr
                         key={kw}
                         className={`cursor-pointer transition-colors hover:bg-gray-50 ${
@@ -482,6 +496,36 @@ export default function Page2() {
                 </tbody>
               </table>
             </div>
+            {/* 페이지네이션 */}
+            {modalTotalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+                <span className="text-xs text-gray-400">
+                  {filteredModalKeywords.length}개 중{' '}
+                  {(modalPage - 1) * MODAL_PAGE_SIZE + 1}–
+                  {Math.min(modalPage * MODAL_PAGE_SIZE, filteredModalKeywords.length)}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setModalPage(p => Math.max(1, p - 1))}
+                    disabled={modalPage === 1}
+                    className="rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+                  >
+                    ‹
+                  </button>
+                  <span className="min-w-[56px] text-center text-xs text-gray-600">
+                    {modalPage} / {modalTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setModalPage(p => Math.min(modalTotalPages, p + 1))}
+                    disabled={modalPage === modalTotalPages}
+                    className="rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-gray-500">
                 {tempSelectedKeywords.length}개 선택됨
@@ -520,10 +564,17 @@ interface TooltipState {
   hour: number
 }
 
-function LineChart({ data }: { data: CompetitorRankData[] }) {
+function LineChart({
+  data,
+  adArea,
+}: {
+  data: CompetitorRankData[]
+  adArea: 'PC' | 'Mobile'
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(800)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const [highlightedIdx, setHighlightedIdx] = useState<number | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -536,11 +587,20 @@ function LineChart({ data }: { data: CompetitorRankData[] }) {
     return () => obs.disconnect()
   }, [])
 
+  // 데이터 변경 시 하이라이트 초기화
+  useEffect(() => {
+    setHighlightedIdx(null)
+  }, [data])
+
   const margin = { top: 20, right: 24, bottom: 44, left: 48 }
   const svgHeight = 340
   const cw = Math.max(containerWidth - margin.left - margin.right, 100)
   const ch = svgHeight - margin.top - margin.bottom
   const hours = Array.from({ length: 24 }, (_, i) => i)
+
+  // PC: 1~10, Mobile: 1~5 고정
+  const maxRank = adArea === 'PC' ? 10 : 5
+  const yTicks = Array.from({ length: maxRank }, (_, i) => i + 1)
 
   const series = data.map((row, idx) => ({
     row,
@@ -554,17 +614,9 @@ function LineChart({ data }: { data: CompetitorRankData[] }) {
       .filter((p): p is { h: number; rank: number } => p !== null),
   }))
 
-  const allRanks = series.flatMap(s => s.points.map(p => p.rank))
-  const maxRank = allRanks.length ? Math.ceil(Math.max(...allRanks)) + 1 : 10
-
   const xScale = (h: number) => (h / 23) * cw
   // rank 1 = 상단 (y=0), maxRank = 하단 (y=ch)
   const yScale = (rank: number) => ((rank - 1) / (maxRank - 1)) * ch
-
-  const yTickCount = Math.min(maxRank - 1, 6)
-  const yTicks = Array.from({ length: yTickCount + 1 }, (_, i) =>
-    Math.round(1 + (i * (maxRank - 1)) / yTickCount),
-  ).filter((v, i, arr) => arr.indexOf(v) === i)
 
   if (data.length === 0) {
     return (
@@ -578,7 +630,7 @@ function LineChart({ data }: { data: CompetitorRankData[] }) {
     <div ref={containerRef} className="relative w-full select-none">
       <svg width={containerWidth} height={svgHeight}>
         <g transform={`translate(${margin.left},${margin.top})`}>
-          {/* 수평 그리드 + Y 눈금 */}
+          {/* 수평 그리드 + Y 눈금 (전체 정수 표시) */}
           {yTicks.map(tick => (
             <g key={tick}>
               <line
@@ -638,6 +690,8 @@ function LineChart({ data }: { data: CompetitorRankData[] }) {
           {/* 시리즈 라인 + 마커 */}
           {series.map(({ row, color, points }, idx) => {
             if (points.length < 2) return null
+            const isHighlighted = highlightedIdx === idx
+            const isDimmed = highlightedIdx !== null && !isHighlighted
             const d = points.reduce(
               (acc, p, i) =>
                 acc +
@@ -647,14 +701,22 @@ function LineChart({ data }: { data: CompetitorRankData[] }) {
               '',
             )
             return (
-              <g key={`series-${idx}`}>
-                <path d={d} fill="none" stroke={color} strokeWidth={2} />
+              <g
+                key={`series-${idx}`}
+                style={{ opacity: isDimmed ? 0.2 : 1, transition: 'opacity 0.15s' }}
+              >
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={isHighlighted ? 3 : 2}
+                />
                 {points.map((p, pi) => (
                   <circle
                     key={pi}
                     cx={xScale(p.h)}
                     cy={yScale(p.rank)}
-                    r={4}
+                    r={isHighlighted ? 5.5 : 4}
                     fill={color}
                     stroke="#fff"
                     strokeWidth={1.5}
@@ -679,17 +741,39 @@ function LineChart({ data }: { data: CompetitorRankData[] }) {
         </g>
       </svg>
 
-      {/* 범례 */}
-      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1.5 px-2">
-        {series.map(({ row, color }, idx) => (
-          <div key={idx} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span
-              className="inline-block h-3 w-3 shrink-0 rounded-full"
-              style={{ backgroundColor: color }}
-            />
-            {row.advertiser}
-          </div>
-        ))}
+      {/* 범례 (클릭으로 강조) */}
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 px-2">
+        {series.map(({ row, color }, idx) => {
+          const isHighlighted = highlightedIdx === idx
+          const isDimmed = highlightedIdx !== null && !isHighlighted
+          return (
+            <button
+              key={idx}
+              onClick={() =>
+                setHighlightedIdx(prev => (prev === idx ? null : idx))
+              }
+              className="flex items-center gap-1.5 text-xs transition-opacity"
+              style={{ opacity: isDimmed ? 0.35 : 1 }}
+            >
+              <span
+                className="inline-block h-3 w-3 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: color,
+                  boxShadow: isHighlighted ? `0 0 0 2px ${color}40` : undefined,
+                }}
+              />
+              <span
+                className={
+                  isHighlighted
+                    ? 'font-semibold text-gray-800'
+                    : 'text-gray-600'
+                }
+              >
+                {row.advertiser}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* 툴팁 */}
