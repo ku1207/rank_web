@@ -711,7 +711,7 @@ export default function Page2() {
             <div className="flex gap-2">
               <Input
                 className="flex-1"
-                placeholder="키워드 검색..."
+                placeholder=""
                 value={keywordSearchText}
                 onChange={e => {
                   setKeywordSearchText(e.target.value)
