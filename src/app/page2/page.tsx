@@ -399,8 +399,8 @@ export default function Page2() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-65px)] px-6 py-8 bg-white">
-      <div className="flex flex-col gap-6">
+    <div className="min-h-[calc(100vh-65px)] bg-white px-6 py-8">
+      <div className="mx-auto flex w-[80%] flex-col gap-6">
 
         {/* ── 페이지 타이틀 ── */}
         <h2 className="text-lg font-bold text-gray-900">경쟁사 순위 조회</h2>
