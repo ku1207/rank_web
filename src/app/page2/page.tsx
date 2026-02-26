@@ -78,6 +78,7 @@ export default function Page2() {
   const [tempSelectedKeywords, setTempSelectedKeywords] = useState<string[]>([])
   const [modalPage, setModalPage] = useState(1)
   const [isKeywordGuideOpen, setIsKeywordGuideOpen] = useState(false)
+  const [isKeywordLimitOpen, setIsKeywordLimitOpen] = useState(false)
 
   // 검색 결과
   const [hasSearched, setHasSearched] = useState(false)
@@ -164,9 +165,11 @@ export default function Page2() {
   }
 
   const handleKeywordToggle = (kw: string) => {
-    setTempSelectedKeywords(prev =>
-      prev.includes(kw) ? prev.filter(k => k !== kw) : [...prev, kw],
-    )
+    setTempSelectedKeywords(prev => {
+      if (prev.includes(kw)) return prev.filter(k => k !== kw)
+      if (prev.length >= 5) { setIsKeywordLimitOpen(true); return prev }
+      return [...prev, kw]
+    })
   }
 
   const handleKeywordConfirm = () => {
@@ -715,6 +718,30 @@ export default function Page2() {
                 </Button>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── 키워드 5개 초과 경고 팝업 ── */}
+      <Dialog open={isKeywordLimitOpen} onOpenChange={setIsKeywordLimitOpen}>
+        <DialogContent className="max-w-xs text-center">
+          <DialogHeader>
+            <DialogTitle className="text-center">키워드 등록 제한</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-5 py-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+              <svg className="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <p className="text-sm text-gray-700">키워드는 5개까지만 등록이 가능합니다.</p>
+            <Button
+              size="sm"
+              className="w-full bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => setIsKeywordLimitOpen(false)}
+            >
+              확인
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
