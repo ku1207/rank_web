@@ -41,6 +41,39 @@ function getDefaultDates() {
   return { start: fmt(startOfMonth), end: fmt(yesterday) }
 }
 
+/**
+ * 광고 경쟁 환경 기반 최적 노출 순위(TargetRank) 산출
+ * - N_t (경쟁자 수) 많을수록 → 순위 보수적 (숫자 커짐)
+ * - σ_t (순위 변동성, STDEV.P) 클수록 → 순위 공격적 (숫자 작아짐)
+ * - 공식: round(N_t / 2 − σ_t), clamp(1 ~ maxRank)
+ * - 데이터 없는 시간대 기본값: 1
+ */
+function computeTargetRanks(
+  data: CompetitorRankData[],
+  excludeAdvertiser: string,
+  adArea: 'PC' | 'Mobile',
+): number[] {
+  const maxRank = adArea === 'PC' ? 10 : 5
+  const sourceData =
+    excludeAdvertiser === '없음'
+      ? data.filter(r => r.ad_area === adArea)
+      : data.filter(r => r.ad_area === adArea && r.advertiser !== excludeAdvertiser)
+
+  return Array.from({ length: 24 }, (_, h) => {
+    const key = `hour_${String(h).padStart(2, '0')}` as HourKey
+    const ranks = sourceData.filter(r => r[key] > 0).map(r => r[key])
+    if (ranks.length === 0) return 1
+
+    const N = ranks.length
+    const mean = ranks.reduce((s, r) => s + r, 0) / N
+    const variance = ranks.reduce((s, r) => s + (r - mean) ** 2, 0) / N
+    const sigma = Math.sqrt(variance)
+
+    const raw = N / 2 - sigma
+    return Math.min(Math.max(Math.round(raw), 1), maxRank)
+  })
+}
+
 export default function Page2() {
   const router = useRouter()
   const [rawData, setRawData] = useState<CompetitorRankData[]>([])
@@ -64,6 +97,11 @@ export default function Page2() {
   const [hasSearched, setHasSearched] = useState(false)
   const [chartTab, setChartTab] = useState<'PC' | 'Mobile'>('PC')
   const [checkedRows, setCheckedRows] = useState<Set<string>>(new Set())
+
+  // AI 추천 순위
+  const [isAiPopupOpen, setIsAiPopupOpen] = useState(false)
+  const [aiExcludeAdvertiser, setAiExcludeAdvertiser] = useState('없음')
+  const [aiTargetRanks, setAiTargetRanks] = useState<number[] | null>(null)
 
   useEffect(() => {
     try {
@@ -113,6 +151,11 @@ export default function Page2() {
   const chartData = useMemo(
     () => searchedData.filter(r => r.ad_area === chartTab),
     [searchedData, chartTab],
+  )
+
+  const advertiserList = useMemo(
+    () => Array.from(new Set(chartData.map(r => r.advertiser))),
+    [chartData],
   )
 
   const handleOpenModal = () => {
@@ -168,7 +211,19 @@ export default function Page2() {
     if (!adAreaPc && !adAreaMobile) return
     setHasSearched(true)
     setCheckedRows(new Set())
+    setAiTargetRanks(null)
   }
+
+  const handleAiConfirm = () => {
+    const ranks = computeTargetRanks(searchedData, aiExcludeAdvertiser, chartTab)
+    setAiTargetRanks(ranks)
+    setIsAiPopupOpen(false)
+  }
+
+  // 탭 전환 시 AI 추천 순위 초기화
+  useEffect(() => {
+    setAiTargetRanks(null)
+  }, [chartTab])
 
   const handleAllCheck = () => {
     if (checkedRows.size === searchedData.length && searchedData.length > 0) {
@@ -331,7 +386,20 @@ export default function Page2() {
                   </button>
                 ))}
               </div>
-              <LineChart data={chartData} adArea={chartTab} />
+              <LineChart data={chartData} adArea={chartTab} aiTargetRanks={aiTargetRanks} />
+
+              {/* AI 추천 순위 버튼 */}
+              <div className="mt-5 flex justify-center border-t border-gray-100 pt-4">
+                <button
+                  onClick={() => {
+                    setAiExcludeAdvertiser('없음')
+                    setIsAiPopupOpen(true)
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
+                >
+                  AI 추천 순위
+                </button>
+              </div>
             </div>
 
             {/* RAW 테이블 */}
@@ -550,6 +618,50 @@ export default function Page2() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── AI 추천 순위 팝업 ── */}
+      <Dialog open={isAiPopupOpen} onOpenChange={setIsAiPopupOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>AI 추천 순위</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-gray-600">
+              최적 순위를 도출하고자 하는 광고주를 선택해주세요.
+            </p>
+            <select
+              value={aiExcludeAdvertiser}
+              onChange={e => setAiExcludeAdvertiser(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300"
+            >
+              <option value="없음">없음</option>
+              {advertiserList.map(a => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400">
+              * 선택한 광고주를 제외한 경쟁 데이터 기반으로 최적 순위를 산출합니다.
+              &apos;없음&apos; 선택 시 전체 광고주 데이터를 활용합니다.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAiPopupOpen(false)}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAiConfirm}
+                className="bg-violet-600 text-white hover:bg-violet-700"
+              >
+                확인
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -567,9 +679,11 @@ interface TooltipState {
 function LineChart({
   data,
   adArea,
+  aiTargetRanks,
 }: {
   data: CompetitorRankData[]
   adArea: 'PC' | 'Mobile'
+  aiTargetRanks?: number[] | null
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(800)
@@ -738,11 +852,45 @@ function LineChart({
               </g>
             )
           })}
+
+          {/* AI 추천 순위 오버레이 라인 */}
+          {aiTargetRanks && (() => {
+            const d = hours.reduce(
+              (acc, h, i) =>
+                acc +
+                (i === 0
+                  ? `M ${xScale(h)} ${yScale(Math.min(aiTargetRanks[h], maxRank))}`
+                  : ` L ${xScale(h)} ${yScale(Math.min(aiTargetRanks[h], maxRank))}`),
+              '',
+            )
+            return (
+              <g>
+                <path
+                  d={d}
+                  fill="none"
+                  stroke="#18181b"
+                  strokeWidth={2.5}
+                  strokeDasharray="8 4"
+                />
+                {hours.map(h => (
+                  <circle
+                    key={h}
+                    cx={xScale(h)}
+                    cy={yScale(Math.min(aiTargetRanks[h], maxRank))}
+                    r={3.5}
+                    fill="#18181b"
+                    stroke="#fff"
+                    strokeWidth={1.5}
+                  />
+                ))}
+              </g>
+            )
+          })()}
         </g>
       </svg>
 
       {/* 범례 (클릭으로 강조) */}
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 px-2">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-2">
         {series.map(({ row, color }, idx) => {
           const isHighlighted = highlightedIdx === idx
           const isDimmed = highlightedIdx !== null && !isHighlighted
@@ -774,6 +922,20 @@ function LineChart({
             </button>
           )
         })}
+
+        {/* AI 추천 순위 범례 */}
+        {aiTargetRanks && (
+          <div className="ml-2 flex items-center gap-1.5 border-l border-gray-200 pl-4 text-xs">
+            <svg width="24" height="12" className="shrink-0">
+              <line
+                x1="0" y1="6" x2="24" y2="6"
+                stroke="#18181b" strokeWidth="2.5" strokeDasharray="7 3"
+              />
+              <circle cx="12" cy="6" r="3" fill="#18181b" />
+            </svg>
+            <span className="font-semibold text-gray-800">AI 추천 순위</span>
+          </div>
+        )}
       </div>
 
       {/* 툴팁 */}
