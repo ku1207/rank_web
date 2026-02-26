@@ -303,6 +303,7 @@ export default function Page2() {
 
         {/* ── 검색 영역 ── */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <h2 className="mb-5 text-base font-bold text-gray-900">경쟁사 순위 조회</h2>
           <div className="flex flex-col gap-5">
 
             {/* 키워드 */}
