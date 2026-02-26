@@ -48,7 +48,7 @@ export interface AnalysisResult {
 }
 
 /**
- * Claude AI 분석 인사이트 타입
+ * Claude AI 분석 인사이트 타입 (기존)
  */
 export interface ClaudeInsight {
   overall_health: string[]
@@ -56,4 +56,12 @@ export interface ClaudeInsight {
   competitor_dynamics: Record<string, string[] | string>
   golden_time: Record<string, string | string[]>
   action_items: string[]
+}
+
+/**
+ * AI 추천 순위 분석 결과 타입
+ */
+export interface AiRankInsight {
+  optimalRankSchedule: Record<string, string>
+  optimalRankScheduleReason: string[]
 }
