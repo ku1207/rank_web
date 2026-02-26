@@ -32,6 +32,13 @@ const CHART_COLORS = [
 
 const MODAL_PAGE_SIZE = 5
 
+// 키워드 모달 더미 데이터 (실제 데이터가 부족할 때 항상 페이지네이션이 보이도록)
+const DUMMY_KEYWORDS = [
+  '등산화 추천', '런닝화 남성', '골프화 여성', '운동화 브랜드',
+  '트레킹화 방수', '축구화 아디다스', '농구화 나이키', '실내화 슬리퍼',
+  '캠핑화 등산', '스포츠화 세일', '편한화 워킹', '방한화 겨울',
+]
+
 // 비딩 스케줄 색상 팔레트
 const SCHEDULE_COLORS = ['#5c6bc0', '#aed581', '#4dd0e1', '#d4e157', '#7986cb'] as const
 const SCHEDULE_HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -108,10 +115,10 @@ export default function Page2() {
     }
   }, [router])
 
-  const allKeywords = useMemo(
-    () => Array.from(new Set(rawData.map(d => d.keyword))),
-    [rawData],
-  )
+  const allKeywords = useMemo(() => {
+    const real = Array.from(new Set(rawData.map(d => d.keyword)))
+    return Array.from(new Set([...real, ...DUMMY_KEYWORDS]))
+  }, [rawData])
 
   const filteredModalKeywords = useMemo(() => {
     if (!keywordSearchText.trim()) return allKeywords
@@ -614,7 +621,7 @@ export default function Page2() {
                 setModalPage(1)
               }}
             />
-            <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200">
+            <div className="rounded-lg border border-gray-200">
               <table className="min-w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50">
                   <tr>
@@ -659,7 +666,7 @@ export default function Page2() {
               </table>
             </div>
             {/* 페이지네이션 */}
-            {modalTotalPages > 1 && (
+            {(
               <div className="flex items-center justify-between border-t border-gray-100 pt-2">
                 <span className="text-xs text-gray-400">
                   {filteredModalKeywords.length}개 중{' '}
@@ -687,7 +694,6 @@ export default function Page2() {
                 </div>
               </div>
             )}
-
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-gray-500">
                 {tempSelectedKeywords.length}개 선택됨
