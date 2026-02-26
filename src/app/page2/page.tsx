@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -12,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { analyzeData, excelToJson } from '@/lib/excel-utils'
 import type { AiRankInsight, CompetitorRankData } from '@/types/competitor-rank'
 
 const STORAGE_KEY = 'analysisPayload'
@@ -32,11 +32,11 @@ const CHART_COLORS = [
 
 const MODAL_PAGE_SIZE = 5
 
-// 키워드 모달 더미 데이터 (실제 데이터가 부족할 때 항상 페이지네이션이 보이도록)
+// 키워드 모달 더미 데이터 (시연: 사용자가 '교육' 키워드 검색 예정)
 const DUMMY_KEYWORDS = [
-  '등산화 추천', '런닝화 남성', '골프화 여성', '운동화 브랜드',
-  '트레킹화 방수', '축구화 아디다스', '농구화 나이키', '실내화 슬리퍼',
-  '캠핑화 등산', '스포츠화 세일', '편한화 워킹', '방한화 겨울',
+  '교육 플랫폼', '교육 콘텐츠', '온라인 교육', '교육 관리',
+  '교육 자료', '교육 서비스', '교육 프로그램', '교육 강의',
+  '교육 솔루션', '기업 교육', '이러닝 교육', '교육 커리큘럼',
 ]
 
 // 비딩 스케줄 색상 팔레트
@@ -63,6 +63,50 @@ export default function Page2() {
   const router = useRouter()
   const [rawData, setRawData] = useState<CompetitorRankData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // ── 업로드 (page1 통합) ──
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+
+  const handleUploadFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) setUploadFile(file)
+  }
+  const handleRemoveUploadFile = () => {
+    setUploadFile(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+  const handleAnalyze = async () => {
+    if (!uploadFile) return
+    setIsAnalyzing(true)
+    try {
+      const jsonData = await excelToJson(uploadFile)
+      const analyzed = analyzeData(jsonData)
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: jsonData }),
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'API 호출 실패')
+      }
+      const { insight: claudeInsight } = await response.json()
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ rawData: jsonData, analysisResult: analyzed, insight: claudeInsight }),
+        )
+      }
+      // 같은 페이지에서 데이터 로드
+      setRawData(jsonData)
+    } catch (error) {
+      alert(error instanceof Error ? `분석 중 오류 발생: ${error.message}` : '파일 분석 중 오류가 발생했습니다.')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
 
   // 검색 조건
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
@@ -122,7 +166,7 @@ export default function Page2() {
   }, [rawData])
 
   const filteredModalKeywords = useMemo(() => {
-    if (!keywordSearchText.trim()) return allKeywords
+    if (!keywordSearchText.trim()) return []
     return allKeywords.filter(k =>
       k.toLowerCase().includes(keywordSearchText.toLowerCase()),
     )
@@ -299,11 +343,57 @@ export default function Page2() {
 
   if (!rawData.length) {
     return (
-      <div className="min-h-[calc(100vh-65px)] flex flex-col items-center justify-center gap-4">
-        <p className="text-lg text-gray-700">데이터가 없습니다. 다시 업로드 해주세요.</p>
-        <Button asChild>
-          <Link href="/page1">업로드 페이지로 이동</Link>
-        </Button>
+      <div className="min-h-[calc(100vh-65px)] flex items-center justify-center p-8 bg-[#f5f5f7]">
+        <div className="w-full max-w-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-bold">경쟁사 순위 분석 서비스</h1>
+            <p className="text-gray-600">엑셀 파일을 업로드하여 경쟁사 순위 데이터를 분석하세요</p>
+          </div>
+          {uploadFile ? (
+            <div className="border-2 border-solid border-blue-300 bg-blue-50 rounded-lg p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <svg className="h-10 w-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">업로드된 파일</p>
+                    <p className="text-base font-semibold text-blue-700">{uploadFile.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">{(uploadFile.size / 1024).toFixed(2)} KB</p>
+                  </div>
+                </div>
+                <button onClick={handleRemoveUploadFile} className="p-2 rounded-full hover:bg-blue-100 transition-colors">
+                  <svg className="h-6 w-6 text-gray-600 hover:text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors"
+            >
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleUploadFileChange} className="hidden" />
+              <div className="space-y-2">
+                <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <div>
+                  <p className="text-gray-600">클릭하여 파일을 선택하세요</p>
+                  <p className="text-sm text-gray-400 mt-1">엑셀 파일(.xlsx, .xls) 지원</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <Button
+            onClick={handleAnalyze}
+            disabled={!uploadFile || isAnalyzing}
+            className="w-full"
+          >
+            {isAnalyzing ? '분석 중...' : '분석 시작'}
+          </Button>
+        </div>
       </div>
     )
   }
@@ -312,9 +402,11 @@ export default function Page2() {
     <div className="min-h-[calc(100vh-65px)] px-6 py-8 bg-[#f5f5f7]">
       <div className="flex flex-col gap-6">
 
+        {/* ── 페이지 타이틀 ── */}
+        <h2 className="text-lg font-bold text-gray-900">경쟁사 순위 조회</h2>
+
         {/* ── 검색 영역 ── */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-          <h2 className="mb-5 text-base font-bold text-gray-900">경쟁사 순위 조회</h2>
           <div className="flex flex-col gap-5">
 
             {/* 키워드 */}
@@ -624,6 +716,12 @@ export default function Page2() {
                 setModalPage(1)
               }}
             />
+            {/* 전체 키워드 개수 — 테이블 좌측 상단 */}
+            {filteredModalKeywords.length > 0 && (
+              <span className="text-xs text-gray-500">
+                총 {filteredModalKeywords.length}개
+              </span>
+            )}
             <div className="rounded-lg border border-gray-200">
               <table className="min-w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50">
@@ -643,7 +741,9 @@ export default function Page2() {
                         colSpan={2}
                         className="px-4 py-6 text-center text-xs text-gray-400"
                       >
-                        검색 결과가 없습니다.
+                        {keywordSearchText.trim()
+                          ? '검색 결과가 없습니다.'
+                          : '키워드를 검색하세요.'}
                       </td>
                     </tr>
                   ) : (
@@ -668,14 +768,9 @@ export default function Page2() {
                 </tbody>
               </table>
             </div>
-            {/* 페이지네이션 */}
-            {(
-              <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-                <span className="text-xs text-gray-400">
-                  {filteredModalKeywords.length}개 중{' '}
-                  {(modalPage - 1) * MODAL_PAGE_SIZE + 1}–
-                  {Math.min(modalPage * MODAL_PAGE_SIZE, filteredModalKeywords.length)}
-                </span>
+            {/* 페이지네이션 — 테이블 하단 중앙 */}
+            {filteredModalKeywords.length > 0 && (
+              <div className="flex justify-center border-t border-gray-100 pt-2">
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setModalPage(p => Math.max(1, p - 1))}
@@ -734,7 +829,7 @@ export default function Page2() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
             </div>
-            <p className="text-sm text-gray-700">키워드는 5개까지만 등록이 가능합니다.</p>
+            <p className="text-sm text-gray-700">최대 5개 키워드를 조회 가능합니다.</p>
             <Button
               size="sm"
               className="w-full bg-blue-600 text-white hover:bg-blue-700"
