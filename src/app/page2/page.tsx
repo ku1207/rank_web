@@ -70,6 +70,7 @@ export default function Page2() {
   const [keywordSearchText, setKeywordSearchText] = useState('')
   const [tempSelectedKeywords, setTempSelectedKeywords] = useState<string[]>([])
   const [modalPage, setModalPage] = useState(1)
+  const [isKeywordGuideOpen, setIsKeywordGuideOpen] = useState(false)
 
   // 검색 결과
   const [hasSearched, setHasSearched] = useState(false)
@@ -308,9 +309,33 @@ export default function Page2() {
 
             {/* 키워드 */}
             <div className="flex items-start gap-4">
-              <span className="w-20 shrink-0 pt-1 text-sm font-semibold text-gray-700">
-                키워드
-              </span>
+              <div className="relative w-20 shrink-0">
+                <div className="flex items-center gap-1 pt-1">
+                  <span className="text-sm font-semibold text-gray-700">키워드</span>
+                  <button
+                    onClick={() => setIsKeywordGuideOpen(v => !v)}
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-gray-400 text-[10px] font-bold text-gray-400 transition-colors hover:border-blue-400 hover:text-blue-500"
+                  >
+                    ?
+                  </button>
+                </div>
+                {isKeywordGuideOpen && (
+                  <div className="absolute left-0 top-8 z-30 w-60 rounded-xl border border-gray-200 bg-white p-4 shadow-xl">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-bold text-gray-800">조회 가능 키워드</p>
+                      <button
+                        onClick={() => setIsKeywordGuideOpen(false)}
+                        className="text-base leading-none text-gray-400 hover:text-gray-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="text-xs leading-relaxed text-gray-500">
+                      에이비딩을 통해 비딩을 진행한 이력이 있는 키워드들을 조회할 수 있습니다.
+                    </p>
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 flex-1">
                 {selectedKeywords.map(kw => (
                   <span
