@@ -721,6 +721,7 @@ export default function Page2() {
               <Button
                 variant="default"
                 onClick={() => setModalPage(1)}
+                className="border border-sky-500 bg-sky-400 text-white hover:bg-sky-500"
               >
                 검색
               </Button>
