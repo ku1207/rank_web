@@ -708,14 +708,23 @@ export default function Page2() {
             <DialogTitle>키워드 선택</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3">
-            <Input
-              placeholder="키워드 검색..."
-              value={keywordSearchText}
-              onChange={e => {
-                setKeywordSearchText(e.target.value)
-                setModalPage(1)
-              }}
-            />
+            <div className="flex gap-2">
+              <Input
+                className="flex-1"
+                placeholder="키워드 검색..."
+                value={keywordSearchText}
+                onChange={e => {
+                  setKeywordSearchText(e.target.value)
+                  setModalPage(1)
+                }}
+              />
+              <Button
+                variant="default"
+                onClick={() => setModalPage(1)}
+              >
+                검색
+              </Button>
+            </div>
             {/* 전체 키워드 개수 — 테이블 좌측 상단 */}
             {filteredModalKeywords.length > 0 && (
               <span className="text-xs text-gray-500">
